@@ -1,31 +1,30 @@
-const errorMiddleware = (err, req, res, next) => {
-    try{
-        let error = { ...err };
-        error.message = err.message;
-        console.err(error);
+export default function errorMiddleware(err, req, res, next) {
+  console.error(err); 
 
-        if(err.name === "CastError") {
-            const message = "Resource not found";
+  let statusCode = err.statusCode || err.status || 500;
+  let message = err.message || 'Server Error';
 
-            error = new Error(message);
-            error.statusCode = 404;
-        }
+  if (err.name === 'CastError') {
+    statusCode = 400;
+    message = 'Resource not found';
+  }
 
-        if(err.code === 11000) {
-            const message = "Duplicate field value entered";
-            error = new Error(message);
-            error.statusCode = 400;
-        }
+  if (err.code === 11000) {
+    statusCode = 400;
+    const fields = err.keyValue ? Object.keys(err.keyValue).join(', ') : 'field';
+    message = `Duplicate value for ${fields}`;
+  }
 
-        if(err.name === "ValidationError") {
-            const message = Object.values(err.error).map(val => val.message);
-            error = new Error(message.join(', '));
-            error.statusCode = 400;
-        }
-        res.status(error.statusCode || 500).json({success: false, error: error.message || "Server Error"});
-    }catch(error) {
-        next(error);
-    }
+  if (err.name === 'ValidationError') {
+    statusCode = 400;
+    const msgs = Object.values(err.errors || {}).map(e => e.message);
+    message = msgs.length ? msgs.join(', ') : 'Validation failed';
+  }
+
+  const payload = { success: false, message };
+  if (process.env.NODE_ENV !== 'production') {
+    payload.stack = err.stack;
+  }
+
+  res.status(statusCode).json(payload);
 }
-
-export default errorMiddleware;
